@@ -25,7 +25,7 @@
 
 Overview
 ---
-This write-up was written as a partial fulfillment of the requirements for the Nano degree of "Self-driving car engineer" at the Udacity. The goal of this project are the following:
+This write-up was written as a partial fulfillment of the requirements for the Nano degree of "Self-driving car engineer" at the Udacity. The goals of this project are the following:
 
 * Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
 * Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
@@ -34,7 +34,7 @@ This write-up was written as a partial fulfillment of the requirements for the N
 * Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
 * Estimate a bounding box for vehicles detected.
 
-The project instructions and starter code can be found in [here](https://github.com/udacity/CarND-Behavioral-Cloning-P3).
+The project instructions and starter code can be found in [here](https://github.com/udacity/CarND-Vehicle-Detection).
 The project environment can be created with [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md).
 
 Rubric Points
@@ -49,14 +49,14 @@ The files are submitted in the directory containing this write-up. The files are
 * `CarND-Vehicle-Detection.ipynb` : a jupyter notebook which contains all the required codes.
 * `CarND-Vehicle-Detection.html` : a html file exported by the jupyter notebook containing all the execution results.
 * `./writeup_images/*` : all the images and video showing the result
-*- `writeup_vehicle_detection.md` : this write-up file
+* `writeup_vehicle_detection.md` : this write-up file
 
 ### Histogram of Oriented Gradients (HOG)
 
 #### 1. Explain how (and identify where in your code) you extracted HOG features from the training images.
 
-I started by examining the training dataset in png format provided for this project [vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicle images](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip)
-The number of vehicle images is 8792 and that of non-vehicle images is 8968 which are well balanced. The png format in dataset has a shape of (64, 64, 3) and data type `float32` Some image samples are shown below.
+I started by examining the training dataset in png format provided for this project [vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicle images](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip).
+The number of vehicle images is 8792 and that of non-vehicle images is 8968 which are well balanced. The png format in dataset has a shape of (64, 64, 3) and data type `float32`. Some image samples are shown below.
 
 ![dataset][image21]
 
@@ -100,7 +100,7 @@ I tried various combinations of parameters but it was not easy to settle on the 
 | cell_per_block | 2 |
 | hog_channel  | 'ALL' |
 
-I decided not to use the color channel histogram feature because it made many false positive in the final video outcome. So `hist_bins` parameter is undefined. The concatenated feature data is normalized by calling `StandardScaler` from `sklearn.preprocessing` library and shuffled and divided into training and test dataset in `train_test_split()` function.
+I decided not to use the color channel histogram feature because it made many false positive in the final video outcome. So `hist_bins` parameter is undefined. The concatenated feature data are normalized by calling `StandardScaler` from `sklearn.preprocessing` library and shuffled and divided into training and test dataset in `train_test_split()` function.
 The classifer training log is as follows.
 ```
 51.34 Seconds to extract Cloor and HOG features...
@@ -134,10 +134,10 @@ which gives
 
 | Parameter    | Value | Meaning |
 |:------------:|:-------------:|:---:|
-| kernel | (16,16) |Specifies the kernel type to be used in the algorithm.|
+| kernel | 'rbf' |Specifies the kernel type to be used in the algorithm.|
 |  C | 4 | Penalty parameter C of the error term. |
 
-The test accuracy with these parameters is 0.9961 as was shown in the previous section.
+The test accuracy with these parameters is 0.9961 shown in the training log of previous section.
 
 ### Sliding Window Search
 
@@ -168,7 +168,7 @@ mydetector = Detecter(1, 2, clf = my_clf, scan_params = params)
 image = mpimg.imread(image_p)
 detected_image= mydetector.video_proc(image)
 ```
-The car-detecting image applied to this pipeline are shown with the heatmap image as well.
+The car-detecting images applied to this pipeline are shown with the heatmap image as well.
 
 ![pipe1][image361]
 ![pipe2][image362]
@@ -184,6 +184,10 @@ The car-detecting image applied to this pipeline are shown with the heatmap imag
 
 I applied the pipeline to the final project video with the help of `moviepy` function. The link to my final video output is [here](./writeup_images/project_video_result.mp4)
 
+<video width="960" height="540" controls>
+  <source src="./writeup_images/project_video_result.mp4">
+</video>
+
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
 I recorded the positions of positive detections in each frame of the video. From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap. I then assumed each blob corresponded to a vehicle. I constructed bounding boxes to cover the area of each blob detected.  
@@ -195,33 +199,37 @@ The pipeline processing image samples in the previous section show the heatmap f
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-The problem I faced in the project was the bounding box jitter. To remedy this issue, I accumulated heatmap values over the past 30 frames and forced to zero the heat map values less than 20. These are specified in the `Detector` class constructor arguments such as `Detector(qnum = 30, th = 20, ...)`. This kind of accumulation feature filters false positives and enable more robust detection.
-This is done in the function 'prod()' which shows the following code snippet.
+The problem I faced in the project was the bounding box jitter. To remedy this issue, I accumulated heatmap values over the past 30 frames and forced to zero the heat map values less than 20. These are specified with the `Detector` class constructor arguments such as `Detector(qnum = 30, th = 20, ...)`. This kind of accumulation feature filters false positives and enable more robust detection.
+The following code snippet shows how this accumulation over frames is done in the function 'prod()'
 ```python
-    def proc(self, image, vis):        
-        # Scan several windows defined in the self.scan_params
-        boxes = []
-        for scan_param in self.scan_params:
-            box, window_img = find_cars(img=image, svc=self.svc, X_scaler=self.scaler, **scan_param, **self.params)
-            boxes.append(box)        
-        boxes = [item for sublist in boxes for item in sublist]
-        
-        # Accumulate `self.number` of frame boxes
-        self.boxbuff.append(boxes)
-        if len(self.boxbuff) > self.number:
-            del self.boxbuff[0]
-        
-        # Construct heat map over the past frames and apply threshold to it
-        self.heat = np.zeros_like(image[:,:,0]).astype(np.float)
-        for boxs in self.boxbuff:
-            for box in boxs:
-                self.heat[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
-        self.heat[self.heat < self.threshold] = 0
-                    
-        # ... some codes ....
-                    
-        return draw_img
+def proc(self, image, vis):        
+    # Scan several windows defined in the self.scan_params
+    boxes = []
+    for scan_param in self.scan_params:
+        box, window_img = find_cars(img=image, svc=self.svc, X_scaler=self.scaler, **scan_param, **self.params)
+        boxes.append(box)        
+    boxes = [item for sublist in boxes for item in sublist]
+
+    # Accumulate `self.number` of frame boxes
+    self.boxbuff.append(boxes)
+    if len(self.boxbuff) > self.number:
+        del self.boxbuff[0]
+
+    # Construct heat map over the past frames and apply threshold to it
+    self.heat = np.zeros_like(image[:,:,0]).astype(np.float)
+    for boxs in self.boxbuff:
+        for box in boxs:
+            self.heat[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+    self.heat[self.heat < self.threshold] = 0
+
+    # ... some codes ....
+
+    return draw_img
 ```
-The feature results in not only robust detections by rejecting instantaneous outliers but also reduced jitters for box detection over frames.
+The feature results in not only robust detections by rejecting instantaneous outliers but also reduced jitters of bounding boxes over frames.
 
 As an optional challenge, I combined the vehicle detection pipeline with the lane finding implementation from the last project. In order to do that, I made a python module `lane_finding.py` from the previous IPython file. Then I incorporate it to the `Detector` class feature which is enabled by the argument `lane_finding = True`. The link to my final video output with the lane finding turned on is found [here](./writeup_images/project_video_result_with_lane.mp4)
+
+<video width="960" height="540" controls>
+  <source src="./writeup_images/project_video_result_with_lane.mp4">
+</video>
