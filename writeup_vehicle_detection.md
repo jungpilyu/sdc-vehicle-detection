@@ -44,36 +44,96 @@ The goals / steps of this project are the following:
 #### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  
 
 The files are submitted in the directory containing this write-up. The files are
-- `CarND-Vehicle-Detection.ipynb` : a jupyter notebook which contains all the required codes.
-- `CarND-Vehicle-Detection.html` : a html file exported by the jupyter notebook containing all the execution results.
-- `./writeup_images/*` : all the images and video showing the result
-- `writeup_vehicle_detection.md` : this write-up file
-
+* `CarND-Vehicle-Detection.ipynb` : a jupyter notebook which contains all the required codes.
+* `CarND-Vehicle-Detection.html` : a html file exported by the jupyter notebook containing all the execution results.
+* `./writeup_images/*` : all the images and video showing the result
+*- `writeup_vehicle_detection.md` : this write-up file
 
 ### Histogram of Oriented Gradients (HOG)
 
 #### 1. Explain how (and identify where in your code) you extracted HOG features from the training images.
 
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
+I started by examining the training dataset in png format provided for this project [vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicle images](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip)
+The number of vehicle images is 8792 and that of non-vehicle images is 8968 which are well balanced. The png format in dataset has a shape of (64, 64, 3) and data type `float32` Some image samples are shown below.
 
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
+![dataset][image21]
 
-![alt text][image1]
+I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from the car images and displayed them to get a feel for what the `skimage.hog()` output looks like using HOG parameters of `orientations=9`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`.
 
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
+![HOG1][image221]
+![HOG2][image222]
+![HOG3][image223]
 
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+##### FEATURE EXTRACTION FROM DATA SET
 
+Several feature extraction functions were defined. Here, three features are explored which are
+- Raw pixel intensity which captures color and shape.
+- Histogram of pixel intensity which captures color characteristics only.
+- Gradients of pixel intensity which captures shape only.
 
-![alt text][image2]
+Vertical image flipping can be used to augment the data set but I concluded that the data set without image flipping were enough to train a classifier. Finally, the MyClf class was defined which is a classifier class for the problem at hand.
 
 #### 2. Explain how you settled on your final choice of HOG parameters.
 
-I tried various combinations of parameters and...
+Many parameters should be adjusted to get good performance. The type of parameters are summarized in the table below.
+
+| Parameter     | Explanation | Examples |
+|:-------------:|:-------------:|:-------------:|
+| spatial_size | Spatial binning dimensions| (32,32) or (16,16) |
+| hist_bins    | Number of histogram bins | 16, 32, 40, ...|
+| color_space  | Color Space Conversion | 'RGB', 'HSV', 'LUV', 'HLS', 'YUV', 'YCrCb' |
+| orient       | HOG orientation resolution | 9, 11, 13, ... |
+| pix_per_cell | HOG Pixels per cell | 8, 12, ...|
+| cell_per_block | HOG cells per block | 2, 3, ...|
+| hog_channel  | channel to be applied in HOG | 0, 1, 2, or 'ALL' |
+
+I tried various combinations of parameters but it was not easy to settle on the particular set because it was not evident to identify a specific good combination of parameters just by assessing test accuracy. Sometimes, I had to re-evaluate again by getting the final video annotation outcome. However this was very time-consuming iteration. So, I had to compromise between time and parameter optimization. Finally I settled on the following paramters
+
+| Parameter    | Value |
+|:------------:|:-------------:|
+| spatial_size | (16,16) |
+| color_space  | 'YUV' |
+| orient       | 11 |
+| pix_per_cell | 16 |
+| cell_per_block | 2 |
+| hog_channel  | 'ALL' |
+
+I decided not to use the color channel histogram feature because it made many false positive in the final video outcome. So `hist_bins` parameter is undefined. The concatenated feature data is normalized by calling `StandardScaler` from `sklearn.preprocessing` library and shuffled and divided into training and test dataset in `train_test_split()` function.
+The classifer training log is as follows.
+```
+51.34 Seconds to extract Cloor and HOG features...
+A count of 8792  cars and 8968  non-cars of size:  1956 , 1956
+Using spatial binning of: (16, 16) and 16 histogram bins
+Using: 11 orientations 16 pixels per cell and 2 cells per block
+Feature vector length: 1956
+54.97 Seconds to train SVC...
+Test Accuracy of SVC =  0.9961
+My SVC predicts : [ 1.  0.  0.  0.  0.  1.  0.  1.  1.  1.  1.  0.  1.  0.  1.  1.  0.  0.]
+For these labels: [ 1.  0.  0.  0.  0.  1.  0.  1.  1.  1.  1.  0.  1.  0.  1.  1.  0.  0.]
+0.0625 Seconds to predict 18 labels with SVC
+```
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-I trained a linear SVM using...
+At first I trained a SVM with default arguments using my selected HOG and color features. However, there is an optimzation possibility in SVM training. So, I run the following code which try all the parameter combination
+```python
+parameters = {'kernel':('linear', 'rbf'), 'C':[0.8, 1, 2, 4, 8]}
+X_train, X_test, y_train, y_test, X_scaler = get_vector(cars, notcars, **params)
+svr = svm.SVC()
+clf = GridSearchCV(svr, parameters)
+clf.fit(X_train, y_train)
+print(clf.best_params_)
+```
+
+
+A classifier parameter tuning was done by `GridSearchCV` function from `sklearn.model_selection` library. The final parameters are the following.
+
+| Parameter    | Value | Meaning |
+|:------------:|:-------------:|:---:|
+| kernel | (16,16) |Specifies the kernel type to be used in the algorithm.|
+|  C | 4 | Penalty parameter C of the error term. |
+
+
 
 ### Sliding Window Search
 
