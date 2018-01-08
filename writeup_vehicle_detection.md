@@ -1,18 +1,6 @@
-## Writeup Template
-### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
+# Vehicle Detection Project
 
----
-
-**Vehicle Detection Project**
-
-The goals / steps of this project are the following:
-
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
-* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
+[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
 [//]: # (Image References)
 [image21]: ./writeup_images/2_1.png
@@ -35,10 +23,24 @@ The goals / steps of this project are the following:
 [video1]: ./writeup_images/project_video_result.mp4
 [video2]: ./writeup_images/project_video_result_with_lane.mp4
 
-## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
-
+Overview
 ---
+This write-up was written as a partial fulfillment of the requirements for the Nano degree of "Self-driving car engineer" at the Udacity. The goal of this project are the following:
+
+* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
+* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
+* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
+* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
+* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
+* Estimate a bounding box for vehicles detected.
+
+The project instructions and starter code can be found in [here](https://github.com/udacity/CarND-Behavioral-Cloning-P3).
+The project environment can be created with [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md).
+
+Rubric Points
+---
+This write-up explains the points in [rubric](https://review.udacity.com/#!/rubrics/513/view) by providing the description in each step and links to other supporting documents and the images to demonstrate how the code works with examples.
+
 ### Writeup / README
 
 #### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  
@@ -115,7 +117,7 @@ For these labels: [ 1.  0.  0.  0.  0.  1.  0.  1.  1.  1.  1.  0.  1.  0.  1.  
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-At first I trained a SVM with default arguments using my selected HOG and color features. However, there is an optimzation possibility in SVM training. So, I run the following code which try all the parameter combination
+At first I trained a SVM with default parameters using my selected HOG and color features. However, there is an optimzation possibility in SVM training. The `GridSearchCV` function from `sklearn.model_selection` library comes in handy for this task. I run the following code which tried all the parameter combination for a kernel (`linear` or `rbf`) and a C (`0.8 ~ 8`). 
 ```python
 parameters = {'kernel':('linear', 'rbf'), 'C':[0.8, 1, 2, 4, 8]}
 X_train, X_test, y_train, y_test, X_scaler = get_vector(cars, notcars, **params)
@@ -124,55 +126,68 @@ clf = GridSearchCV(svr, parameters)
 clf.fit(X_train, y_train)
 print(clf.best_params_)
 ```
-
-
-A classifier parameter tuning was done by `GridSearchCV` function from `sklearn.model_selection` library. The final parameters are the following.
+which gives
+```
+{'C': 4, 'kernel': 'rbf'}
+```
+ The final parameters are shown in the table below.
 
 | Parameter    | Value | Meaning |
 |:------------:|:-------------:|:---:|
 | kernel | (16,16) |Specifies the kernel type to be used in the algorithm.|
 |  C | 4 | Penalty parameter C of the error term. |
 
-
+The test accuracy with these parameters is 0.9961 as was shown in the previous section.
 
 ### Sliding Window Search
 
 #### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+As was described in the course material, 'Tips and Tricks for the Project', I extract HOG features just once for the entire region of interest in each full image / video frame and subsample that array for each sliding window. Actually, the function `find_cars` given in the course does this job. So I began to modify this function to incorporate some features such as `spatial_size`, `hist_bins`, and normalization on/off.
+When it comes to scales to search, I examined the test images and video to estimate the car size and position in images and tested several times to settle on the following values. That is, I scan a frame with 5 different size and position which are shown in the figure below
 
-![alt text][image3]
+| scan number | ystart | ystop | scale |
+|-------------|--------|-------|-------|
+| 0           | 416    | 480   |  1.0  |
+| 1           | 400    | 496   |  1.2  |
+| 2           | 400    | 496   |  1.5  |
+| 3           | 400    | 528   |  2.0  |
+| 4           | 464    | 660   |  2.5  |
+
+![win1][image31]
+![win2][image32]
+![win3][image33]
+![win4][image34]
+![win5][image35]
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+I defined the class `Detector` to encapsulate all the pipeline functions. The class usage is shown below.
+```python
+mydetector = Detecter(1, 2, clf = my_clf, scan_params = params)
+image = mpimg.imread(image_p)
+detected_image= mydetector.video_proc(image)
+```
+The car-detecting image applied to this pipeline are shown with the heatmap image as well.
 
-![alt text][image4]
+![pipe1][image361]
+![pipe2][image362]
+![pipe3][image363]
+![pipe4][image364]
+![pipe5][image365]
+![pipe6][image366]
 ---
 
 ### Video Implementation
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
 
+I applied the pipeline to the final project video with the help of `moviepy` function. The link to my final video output is [here](./writeup_images/project_video_result.mp4)
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
-
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
+I recorded the positions of positive detections in each frame of the video. From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap. I then assumed each blob corresponded to a vehicle. I constructed bounding boxes to cover the area of each blob detected.  
+The pipeline processing image samples in the previous section show the heatmap from test images, the result of `scipy.ndimage.measurements.label()` and the bounding boxes.
 
 ---
 
@@ -180,5 +195,33 @@ Here's an example result showing the heatmap from a series of frames of video, t
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+The problem I faced in the project was the bounding box jitter. To remedy this issue, I accumulated heatmap values over the past 30 frames and forced to zero the heat map values less than 20. These are specified in the `Detector` class constructor arguments such as `Detector(qnum = 30, th = 20, ...)`. This kind of accumulation feature filters false positives and enable more robust detection.
+This is done in the function 'prod()' which shows the following code snippet.
+```python
+    def proc(self, image, vis):        
+        # Scan several windows defined in the self.scan_params
+        boxes = []
+        for scan_param in self.scan_params:
+            box, window_img = find_cars(img=image, svc=self.svc, X_scaler=self.scaler, **scan_param, **self.params)
+            boxes.append(box)        
+        boxes = [item for sublist in boxes for item in sublist]
+        
+        # Accumulate `self.number` of frame boxes
+        self.boxbuff.append(boxes)
+        if len(self.boxbuff) > self.number:
+            del self.boxbuff[0]
+        
+        # Construct heat map over the past frames and apply threshold to it
+        self.heat = np.zeros_like(image[:,:,0]).astype(np.float)
+        for boxs in self.boxbuff:
+            for box in boxs:
+                self.heat[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+        self.heat[self.heat < self.threshold] = 0
+                    
+        # ... some codes ....
+                    
+        return draw_img
+```
+The feature results in not only robust detections by rejecting instantaneous outliers but also reduced jitters for box detection over frames.
 
+As an optional challenge, I combined the vehicle detection pipeline with the lane finding implementation from the last project. In order to do that, I made a python module `lane_finding.py` from the previous IPython file. Then I incorporate it to the `Detector` class feature which is enabled by the argument `lane_finding = True`. The link to my final video output with the lane finding turned on is found [here](./writeup_images/project_video_result_with_lane.mp4)
